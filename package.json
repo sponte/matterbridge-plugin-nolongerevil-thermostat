@@ -1,11 +1,10 @@
 {
-  "name": "matterbridge-plugin-template",
-  "version": "1.0.17",
-  "description": "Matterbridge Template Plugin",
-  "author": "https://github.com/Luligu",
-  "homepage": "https://www.npmjs.com/package/matterbridge-plugin-template",
+  "name": "matterbridge-plugin-nolongerevil-thermostat",
+  "version": "1.0.0",
+  "description": "Matterbridge plugin that bridges No Longer Evil self-hosted Nest thermostats to Matter, with live SSE-driven updates.",
+  "author": "https://github.com/eu-evops",
+  "homepage": "https://github.com/eu-evops/matterbridge-plugin-nolongerevil-thermostat#readme",
   "license": "Apache-2.0",
-  "private": true,
   "type": "module",
   "main": "dist/module.js",
   "types": "dist/module.d.ts",
@@ -20,19 +19,17 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Luligu/matterbridge-plugin-template.git"
+    "url": "git+https://github.com/eu-evops/matterbridge-plugin-nolongerevil-thermostat.git"
   },
   "bugs": {
-    "url": "https://github.com/Luligu/matterbridge-plugin-template/issues"
-  },
-  "funding": {
-    "type": "buymeacoffee",
-    "url": "https://www.buymeacoffee.com/luligugithub"
+    "url": "https://github.com/eu-evops/matterbridge-plugin-nolongerevil-thermostat/issues"
   },
   "keywords": [
     "matterbridge",
     "plugin",
-    "template",
+    "nest",
+    "nolongerevil",
+    "thermostat",
     "matter.js",
     "matter-node.js",
     "matter",

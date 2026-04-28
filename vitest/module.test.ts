@@ -1,18 +1,42 @@
 import path from 'node:path';
 
-import { MatterbridgeEndpoint, PlatformConfig, PlatformMatterbridge } from 'matterbridge';
+import { PlatformConfig, PlatformMatterbridge } from 'matterbridge';
 import { AnsiLogger, LogLevel } from 'matterbridge/logger';
 import { VendorId } from 'matterbridge/matter';
 
-import { TemplatePlatform } from '../src/module.js';
+import type { NleStatus } from '../src/matter-mapping.js';
+import type { NleDevice } from '../src/nle-client.js';
+
+interface SseHooksLike {
+  onSerial: (serial: string) => void;
+  onConnect?: () => void;
+  onDisconnect?: () => void;
+  onError: (error: unknown) => void;
+}
+
+const mocks = vi.hoisted(() => ({
+  listDevices: vi.fn(),
+  getStatus: vi.fn(),
+  sendCommand: vi.fn(),
+  subscribeEvents: vi.fn(),
+}));
+
+vi.mock('../src/nle-client.js', () => ({
+  listDevices: mocks.listDevices,
+  getStatus: mocks.getStatus,
+  sendCommand: mocks.sendCommand,
+  subscribeEvents: mocks.subscribeEvents,
+}));
+
+const { NoLongerEvilThermostatPlatform, SystemMode } = await import('../src/module.js');
 
 const mockLog = {
-  fatal: vi.fn((message: string, ...parameters: any[]) => {}),
-  error: vi.fn((message: string, ...parameters: any[]) => {}),
-  warn: vi.fn((message: string, ...parameters: any[]) => {}),
-  notice: vi.fn((message: string, ...parameters: any[]) => {}),
-  info: vi.fn((message: string, ...parameters: any[]) => {}),
-  debug: vi.fn((message: string, ...parameters: any[]) => {}),
+  fatal: vi.fn(),
+  error: vi.fn(),
+  warn: vi.fn(),
+  notice: vi.fn(),
+  info: vi.fn(),
+  debug: vi.fn(),
 } as unknown as AnsiLogger;
 
 const mockMatterbridge: PlatformMatterbridge = {
@@ -22,12 +46,12 @@ const mockMatterbridge: PlatformMatterbridge = {
     osRelease: 'x.y.z',
     nodeVersion: '22.10.0',
   },
-  rootDirectory: path.join('.cache', 'vitest', 'TemplatePlugin'),
-  homeDirectory: path.join('.cache', 'vitest', 'TemplatePlugin'),
-  matterbridgeDirectory: path.join('.cache', 'vitest', 'TemplatePlugin', '.matterbridge'),
-  matterbridgePluginDirectory: path.join('.cache', 'vitest', 'TemplatePlugin', 'Matterbridge'),
-  matterbridgeCertDirectory: path.join('.cache', 'vitest', 'TemplatePlugin', '.mattercert'),
-  globalModulesDirectory: path.join('.cache', 'vitest', 'TemplatePlugin', 'node_modules'),
+  rootDirectory: path.join('.cache', 'vitest', 'NlePlugin'),
+  homeDirectory: path.join('.cache', 'vitest', 'NlePlugin'),
+  matterbridgeDirectory: path.join('.cache', 'vitest', 'NlePlugin', '.matterbridge'),
+  matterbridgePluginDirectory: path.join('.cache', 'vitest', 'NlePlugin', 'Matterbridge'),
+  matterbridgeCertDirectory: path.join('.cache', 'vitest', 'NlePlugin', '.mattercert'),
+  globalModulesDirectory: path.join('.cache', 'vitest', 'NlePlugin', 'node_modules'),
   matterbridgeVersion: '3.5.0',
   matterbridgeLatestVersion: '3.5.0',
   matterbridgeDevVersion: '3.5.0',
@@ -37,115 +61,230 @@ const mockMatterbridge: PlatformMatterbridge = {
   aggregatorVendorName: 'Matterbridge',
   aggregatorProductId: 0x8000,
   aggregatorProductName: 'Matterbridge aggregator',
-  // Mocked methods
-  registerVirtualDevice: vi.fn(async (name: string, type: 'light' | 'outlet' | 'switch' | 'mounted_switch', callback: () => Promise<void>) => {}),
-  addBridgedEndpoint: vi.fn(async (pluginName: string, device: MatterbridgeEndpoint) => {}),
-  removeBridgedEndpoint: vi.fn(async (pluginName: string, device: MatterbridgeEndpoint) => {}),
-  removeAllBridgedEndpoints: vi.fn(async (pluginName: string) => {}),
+  registerVirtualDevice: vi.fn(async () => {}),
+  addBridgedEndpoint: vi.fn(async () => {}),
+  removeBridgedEndpoint: vi.fn(async () => {}),
+  removeAllBridgedEndpoints: vi.fn(async () => {}),
 } as unknown as PlatformMatterbridge;
 
-const mockConfig: PlatformConfig = {
-  name: 'matterbridge-plugin-template',
+const baseConfig: PlatformConfig = {
+  name: 'matterbridge-plugin-nolongerevil-thermostat',
   type: 'DynamicPlatform',
   version: '1.0.0',
+  apiUrl: 'http://server:8082',
+  pollIntervalSeconds: 0,
   whiteList: [],
   blackList: [],
   debug: false,
   unregisterOnShutdown: false,
 };
 
-const loggerLogSpy = vi.spyOn(AnsiLogger.prototype, 'log').mockImplementation((level: string, message: string, ...parameters: any[]) => {});
+const sampleDevice: NleDevice = { id: 'd1', serial: 'S1', name: 'Living Room' };
 
-describe('Matterbridge Plugin Template', () => {
-  let instance: TemplatePlatform;
+function statusFor(overrides: Partial<NleStatus> = {}): NleStatus {
+  return {
+    serial: 'S1',
+    name: 'Living Room',
+    is_available: true,
+    is_online: true,
+    current_temperature: 20,
+    target_temperature: 21,
+    target_temperature_high: 24,
+    target_temperature_low: 18,
+    mode: 'heat',
+    can_heat: true,
+    can_cool: true,
+    has_fan: false,
+    away: false,
+    ...overrides,
+  };
+}
 
-  beforeEach(() => {
-    vi.clearAllMocks();
+vi.spyOn(AnsiLogger.prototype, 'log').mockImplementation(() => {});
+
+function injectMatterNode(instance: any): void {
+  instance.setMatterNode(
+    // @ts-expect-error Test-only mock surface
+    mockMatterbridge.addBridgedEndpoint,
+    // @ts-expect-error Test-only mock surface
+    mockMatterbridge.removeBridgedEndpoint,
+    // @ts-expect-error Test-only mock surface
+    mockMatterbridge.removeAllBridgedEndpoints,
+    // @ts-expect-error Test-only mock surface
+    mockMatterbridge.registerVirtualDevice,
+  );
+}
+
+async function buildInstance(configOverrides: Partial<PlatformConfig> = {}): Promise<InstanceType<typeof NoLongerEvilThermostatPlatform>> {
+  const cfg: PlatformConfig = { ...baseConfig, ...configOverrides };
+  // @ts-expect-error mutate readonly for test scenarios
+  mockMatterbridge.matterbridgeVersion = '3.5.0';
+  const platform = new NoLongerEvilThermostatPlatform(mockMatterbridge, mockLog, cfg);
+  injectMatterNode(platform);
+  return platform;
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mocks.listDevices.mockReset();
+  mocks.getStatus.mockReset();
+  mocks.sendCommand.mockReset();
+  mocks.subscribeEvents.mockReset();
+  mocks.subscribeEvents.mockResolvedValue(undefined);
+});
+
+describe('NoLongerEvilThermostatPlatform construction', () => {
+  it('throws if Matterbridge is below 3.4.0', () => {
+    // @ts-expect-error mutate readonly for test scenarios
+    mockMatterbridge.matterbridgeVersion = '2.0.0';
+    expect(() => new NoLongerEvilThermostatPlatform(mockMatterbridge, mockLog, baseConfig)).toThrow(/3\.4\.0/);
+    // @ts-expect-error mutate readonly for test scenarios
+    mockMatterbridge.matterbridgeVersion = '3.5.0';
   });
 
-  afterAll(() => {
-    vi.restoreAllMocks();
+  it('default-exports an initializer that constructs the platform', async () => {
+    const init = (await import('../src/module.js')).default;
+    const instance = init(mockMatterbridge, mockLog, baseConfig);
+    expect(instance).toBeInstanceOf(NoLongerEvilThermostatPlatform);
+  });
+});
+
+describe('discovery and registration', () => {
+  it('registers a thermostat + away switch per device', async () => {
+    const platform = await buildInstance();
+    mocks.listDevices.mockResolvedValueOnce([sampleDevice]);
+    mocks.getStatus.mockResolvedValueOnce(statusFor());
+    await platform.onStart('test');
+    const ids = platform.getDevices().map((d) => d.originalId);
+    expect(ids).toEqual(expect.arrayContaining(['nle-thermo-S1', 'nle-away-S1']));
+    await platform.onShutdown('test');
   });
 
-  it('should throw an error if matterbridge is not the required version', async () => {
-    // @ts-expect-error Ignore readonly for testing purposes
-    mockMatterbridge.matterbridgeVersion = '2.0.0'; // Simulate an older version
-    expect(() => new TemplatePlatform(mockMatterbridge, mockLog, mockConfig)).toThrow(
-      'This plugin requires Matterbridge version >= "3.4.0". Please update Matterbridge from 2.0.0 to the latest version in the frontend.',
-    );
-    // @ts-expect-error Ignore readonly for testing purposes
-    mockMatterbridge.matterbridgeVersion = '3.4.0';
+  it('logs and continues when listDevices fails', async () => {
+    const platform = await buildInstance();
+    mocks.listDevices.mockRejectedValueOnce(new Error('connect refused'));
+    await platform.onStart();
+    expect(mockLog.error).toHaveBeenCalledWith(expect.stringContaining('connect refused'));
+    await platform.onShutdown();
   });
 
-  it('should create an instance of the platform', async () => {
-    instance = (await import('../src/module.js')).default(mockMatterbridge, mockLog, mockConfig) as TemplatePlatform;
-    // @ts-expect-error Accessing private method for testing purposes
-    instance.setMatterNode(
-      // @ts-expect-error Accessing private method for testing purposes
-      mockMatterbridge.addBridgedEndpoint,
-      // @ts-expect-error Accessing private method for testing purposes
-      mockMatterbridge.removeBridgedEndpoint,
-      // @ts-expect-error Accessing private method for testing purposes
-      mockMatterbridge.removeAllBridgedEndpoints,
-      // @ts-expect-error Accessing private method for testing purposes
-      mockMatterbridge.registerVirtualDevice,
-    );
-    expect(instance).toBeInstanceOf(TemplatePlatform);
-    expect(instance.matterbridge).toBe(mockMatterbridge);
-    expect(instance.log).toBe(mockLog);
-    expect(instance.config).toBe(mockConfig);
-    expect(instance.matterbridge.matterbridgeVersion).toBe('3.4.0');
-    expect(mockLog.info).toHaveBeenCalledWith('Initializing Platform...');
+  it('falls back to localhost when apiUrl is missing', async () => {
+    const platform = await buildInstance({ apiUrl: '' });
+    mocks.listDevices.mockResolvedValueOnce([]);
+    await platform.onStart();
+    expect(mocks.listDevices).toHaveBeenCalledWith('http://localhost:8082');
+    await platform.onShutdown();
+  });
+});
+
+describe('command handlers', () => {
+  it('translates SystemMode writes into set_mode commands', async () => {
+    const platform = await buildInstance();
+    mocks.listDevices.mockResolvedValueOnce([sampleDevice]);
+    mocks.getStatus.mockResolvedValueOnce(statusFor());
+    mocks.sendCommand.mockResolvedValue(undefined);
+    await platform.onStart();
+    await (platform as any).handleSystemModeWrite((platform as any).bindings.get('S1'), SystemMode.Cool);
+    expect(mocks.sendCommand).toHaveBeenCalledWith('http://server:8082', 'S1', { command: 'set_mode', value: 'cool' });
+    await platform.onShutdown();
   });
 
-  it('should start with node devices selected', async () => {
-    mockConfig.whiteList = ['No devices'];
-    await instance.onStart('Jest');
-    expect(mockLog.info).toHaveBeenCalledWith('onStart called with reason: Jest');
-    await instance.onStart();
-    expect(mockLog.info).toHaveBeenCalledWith('onStart called with reason: none');
+  it('translates a heat-mode setpoint write into set_temperature', async () => {
+    const platform = await buildInstance();
+    mocks.listDevices.mockResolvedValueOnce([sampleDevice]);
+    mocks.getStatus.mockResolvedValueOnce(statusFor({ mode: 'heat' }));
+    mocks.sendCommand.mockResolvedValue(undefined);
+    await platform.onStart();
+    await (platform as any).handleSetpointWrite((platform as any).bindings.get('S1'), 'heat', 2200);
+    expect(mocks.sendCommand).toHaveBeenCalledWith('http://server:8082', 'S1', { command: 'set_temperature', value: 22 });
+    await platform.onShutdown();
   });
 
-  it('should start', async () => {
-    mockConfig.whiteList = [];
-    await instance.onStart('Jest');
-    expect(mockLog.info).toHaveBeenCalledWith('onStart called with reason: Jest');
-    await instance.onStart();
-    expect(mockLog.info).toHaveBeenCalledWith('onStart called with reason: none');
+  it('translates away on/off commands into set_away', async () => {
+    const platform = await buildInstance();
+    mocks.listDevices.mockResolvedValueOnce([sampleDevice]);
+    mocks.getStatus.mockResolvedValueOnce(statusFor());
+    mocks.sendCommand.mockResolvedValue(undefined);
+    await platform.onStart();
+    await (platform as any).handleAwayCommand((platform as any).bindings.get('S1'), true);
+    expect(mocks.sendCommand).toHaveBeenCalledWith('http://server:8082', 'S1', { command: 'set_away', value: true });
+    await platform.onShutdown();
+  });
+});
+
+describe('SSE-driven updates', () => {
+  it('re-fetches status and applies it on each event', async () => {
+    const platform = await buildInstance();
+    let capturedHooks: SseHooksLike | null = null;
+    mocks.subscribeEvents.mockImplementation(async (_url: string, _signal: AbortSignal, hooks: SseHooksLike) => {
+      capturedHooks = hooks;
+      return new Promise(() => {});
+    });
+    mocks.listDevices.mockResolvedValueOnce([sampleDevice]);
+    mocks.getStatus.mockResolvedValueOnce(statusFor());
+    await platform.onStart();
+    mocks.getStatus.mockResolvedValueOnce(statusFor({ mode: 'cool' }));
+    capturedHooks!.onSerial('S1');
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(mocks.getStatus).toHaveBeenCalledTimes(2);
+    await platform.onShutdown();
   });
 
-  it('should call the command handlers', async () => {
-    for (const device of instance.getDevices()) {
-      if (device.hasClusterServer('onOff')) {
-        await device.executeCommandHandler('on', {}, 'onOff', {} as any, device);
-        await device.executeCommandHandler('off', {}, 'onOff', {} as any, device);
-      }
-    }
-    expect(mockLog.info).toHaveBeenCalledWith('Command on called on cluster onOff');
-    expect(mockLog.info).toHaveBeenCalledWith('Command off called on cluster onOff');
+  it('logs lifecycle events at info level', async () => {
+    const platform = await buildInstance();
+    mocks.subscribeEvents.mockImplementationOnce(async (_url: string, _signal: AbortSignal, hooks: SseHooksLike) => {
+      hooks.onConnect?.();
+      hooks.onDisconnect?.();
+      hooks.onError(new Error('terminated'));
+    });
+    mocks.listDevices.mockResolvedValueOnce([sampleDevice]);
+    mocks.getStatus.mockResolvedValueOnce(statusFor());
+    await platform.onStart();
+    expect(mockLog.info).toHaveBeenCalledWith(expect.stringContaining('SSE event stream connected'));
+    expect(mockLog.info).toHaveBeenCalledWith(expect.stringContaining('SSE event stream closed by server'));
+    await platform.onShutdown();
   });
+});
 
-  it('should configure', async () => {
-    await instance.onConfigure();
+describe('lifecycle hooks', () => {
+  it('logs in onConfigure and iterates devices', async () => {
+    const platform = await buildInstance();
+    mocks.listDevices.mockResolvedValueOnce([sampleDevice]);
+    mocks.getStatus.mockResolvedValueOnce(statusFor());
+    await platform.onStart();
+    await platform.onConfigure();
     expect(mockLog.info).toHaveBeenCalledWith('onConfigure called');
-    expect(mockLog.info).toHaveBeenCalledWith(expect.stringContaining('Configuring device'));
+    await platform.onShutdown();
   });
 
-  it('should change logger level', async () => {
-    await instance.onChangeLoggerLevel(LogLevel.DEBUG);
-    expect(mockLog.info).toHaveBeenCalledWith('onChangeLoggerLevel called with: debug');
+  it('logs in onChangeLoggerLevel', async () => {
+    const platform = await buildInstance();
+    await platform.onChangeLoggerLevel(LogLevel.DEBUG);
+    expect(mockLog.info).toHaveBeenCalledWith(`onChangeLoggerLevel called with: ${LogLevel.DEBUG}`);
   });
 
-  it('should shutdown', async () => {
-    await instance.onShutdown('Jest');
-    expect(mockLog.info).toHaveBeenCalledWith('onShutdown called with reason: Jest');
-
-    // Mock the unregisterOnShutdown behavior
-    mockConfig.unregisterOnShutdown = true;
-    await instance.onShutdown();
-    expect(mockLog.info).toHaveBeenCalledWith('onShutdown called with reason: none');
-    // @ts-expect-error Accessing private method for testing purposes
+  it('aborts SSE and unregisters on shutdown when configured', async () => {
+    const platform = await buildInstance({ unregisterOnShutdown: true });
+    mocks.listDevices.mockResolvedValueOnce([sampleDevice]);
+    mocks.getStatus.mockResolvedValueOnce(statusFor());
+    await platform.onStart();
+    await platform.onShutdown('test');
+    // @ts-expect-error Test-only mock surface
     expect(mockMatterbridge.removeAllBridgedEndpoints).toHaveBeenCalled();
-    mockConfig.unregisterOnShutdown = false;
+  });
+});
+
+describe('endpoint handler wiring', () => {
+  it('away on/off command handlers invoke handleAwayCommand', async () => {
+    const platform = await buildInstance();
+    mocks.listDevices.mockResolvedValueOnce([sampleDevice]);
+    mocks.getStatus.mockResolvedValueOnce(statusFor());
+    mocks.sendCommand.mockResolvedValue(undefined);
+    await platform.onStart();
+    const awayEndpoint = platform.getDevices().find((d) => d.originalId === 'nle-away-S1');
+    expect(awayEndpoint).toBeDefined();
+    await awayEndpoint!.executeCommandHandler('on', {}, 'onOff', {} as any, awayEndpoint!);
+    expect(mocks.sendCommand).toHaveBeenCalledWith('http://server:8082', 'S1', { command: 'set_away', value: true });
+    await platform.onShutdown();
   });
 });

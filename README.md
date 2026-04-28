@@ -1,141 +1,119 @@
-# <img src="https://matterbridge.io/assets/matterbridge.svg" alt="Matterbridge Logo" width="64px" height="64px">&nbsp;&nbsp;&nbsp;Matterbridge Plugin Template
+# Matterbridge No Longer Evil Thermostat Plugin
 
-[![npm version](https://img.shields.io/npm/v/matterbridge.svg)](https://www.npmjs.com/package/matterbridge)
-[![npm downloads](https://img.shields.io/npm/dt/matterbridge.svg)](https://www.npmjs.com/package/matterbridge)
-[![Docker Version](https://img.shields.io/docker/v/luligu/matterbridge/latest?label=docker%20version)](https://hub.docker.com/r/luligu/matterbridge)
-[![Docker Pulls](https://img.shields.io/docker/pulls/luligu/matterbridge?label=docker%20pulls)](https://hub.docker.com/r/luligu/matterbridge)
-![Node.js CI](https://github.com/Luligu/matterbridge-plugin-template/actions/workflows/build.yml/badge.svg)
-![CodeQL](https://github.com/Luligu/matterbridge-plugin-template/actions/workflows/codeql.yml/badge.svg)
-[![codecov](https://codecov.io/gh/Luligu/matterbridge-plugin-template/branch/main/graph/badge.svg)](https://codecov.io/gh/Luligu/matterbridge-plugin-template)
-[![styled with prettier](https://img.shields.io/badge/styled_with-Prettier-f8bc45.svg?logo=prettier)](https://prettier.io/)
-[![linted with eslint](https://img.shields.io/badge/linted_with-ES_Lint-4B32C3.svg?logo=eslint)](https://eslint.org/)
+[![npm version](https://img.shields.io/npm/v/matterbridge-plugin-nolongerevil-thermostat.svg)](https://www.npmjs.com/package/matterbridge-plugin-nolongerevil-thermostat)
+[![Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![ESM](https://img.shields.io/badge/ESM-Node.js-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
-[![matterbridge.io](https://img.shields.io/badge/matterbridge.io-online-brightgreen)](https://matterbridge.io)
-
 [![powered by](https://img.shields.io/badge/powered%20by-matterbridge-blue)](https://www.npmjs.com/package/matterbridge)
-[![powered by](https://img.shields.io/badge/powered%20by-matter--history-blue)](https://www.npmjs.com/package/matter-history)
-[![powered by](https://img.shields.io/badge/powered%20by-node--ansi--logger-blue)](https://www.npmjs.com/package/node-ansi-logger)
-[![powered by](https://img.shields.io/badge/powered%20by-node--persist--manager-blue)](https://www.npmjs.com/package/node-persist-manager)
 
-This repository provides a default template for developing Matterbridge plugins.
+Bridges [No Longer Evil](https://nolongerevil.com) self-hosted Nest thermostats into [Matterbridge](https://github.com/Luligu/matterbridge), exposing each thermostat to Matter controllers (Apple Home, Google Home, SmartThings, Home Assistant, …) with sub-second live updates.
 
-If you like this project and find it useful, please consider giving it a star on [GitHub](https://github.com/Luligu/matterbridge-plugin-template) and sponsoring it.
+## What it does
 
-<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="120"></a>
+For every thermostat reported by your No Longer Evil control server the plugin exposes:
 
-## Features
+- A **Thermostat** device with `LocalTemperature`, `OccupiedHeatingSetpoint`, `OccupiedCoolingSetpoint`, `SystemMode` (`Off` / `Heat` / `Cool` / `Auto`), and `ControlSequenceOfOperation` derived from each device's `can_heat` / `can_cool` capabilities.
+- A separate on/off **Away** switch — `on` puts the thermostat in away mode, `off` returns to home.
 
-- **Dev Container support for instant development environment**.
-- Pre-configured TypeScript, ESLint, Prettier, Jest and Vitest.
-- Example project structure for Accessory and Dynamic platforms.
-- Ready for customization for your own plugin.
-- The project has an already configured Jest / Vitest test unit (with 100% coverage) that you can expand while you add your own plugin logic.
+State syncs both ways:
 
-## Available workflows
+- Writes from a Matter controller (changing mode, setpoint, away) are translated into `POST /command` calls on the No Longer Evil control server.
+- The No Longer Evil `GET /api/events` SSE stream drives near-instant updates back to Matter (the plugin re-fetches `/status?serial=…` on each event and pushes attribute updates).
+- A defensive periodic poll (configurable, default 5 minutes) re-syncs every device to recover from any missed events or dropped streams.
 
-The project has the following already configured workflows:
+## Requirements
 
-- build.yml: run on push and pull request and build, lint and test the plugin on node 20, 22 and 24 with ubuntu, macOS and windows.
-- publish.yml: publish on npm under tag latest when you create a new release in GitHub and publish under tag dev on npm from main (or dev if it exist) branch every day at midnight UTC if there is a new commit. The workflow has been updated for trusted publishing / OIDC, so you need to setup the package npm settings to allow it (i.e. authorize publish.yml).
-- codeql.yml: run CodeQL from the main branch on each push and pull request.
-- codecov.yml: run CodeCov from the main branch on each push and pull request. You need a codecov account and to add your CODECOV_TOKEN to the repository secrets.
+- A running [No Longer Evil **self-hosted** control server](https://docs.nolongerevil.com/) (typically port `8082`).
+- Matterbridge `>= 3.4.0`.
+- Node.js `>= 20.19.0` (`>= 22.13.0` for the 22.x line, `>= 24.0.0` for the 24.x line).
 
-## ⚠️ Warning: GitHub Actions Costs for Private Repositories
+> The plugin currently targets the **self-hosted** No Longer Evil control server. The hosted API at `nolongerevil.com/api/v1` is not yet supported because it does not expose the SSE event stream the plugin relies on for live updates.
 
-**Important**: If you plan to use this template in a **private repository**, be aware that GitHub Actions usage may incur costs:
+## Install
 
-- **Free tier limits**: Private repositories have limited free GitHub Actions minutes per month (2,000 minutes for free accounts).
-- **Workflow intensity**: This template includes multiple workflows that run on different operating systems (Ubuntu, macOS, Windows) and Node.js versions (20, 22, 24), which can consume minutes quickly.
-- **Daily automated workflows**: The dev publishing workflows run daily, which can add up over time.
-- **Pricing varies by OS**: macOS runners cost 10x more than Ubuntu runners, Windows runners cost 2x more.
+```bash
+npm install -g matterbridge-plugin-nolongerevil-thermostat
+matterbridge -add matterbridge-plugin-nolongerevil-thermostat
+```
 
-**Recommendations for private repos**:
+Then open the Matterbridge frontend and configure the plugin (see below).
 
-- Monitor your GitHub Actions usage in your account settings.
-- Consider disabling some workflows or reducing the OS/Node.js version matrix.
-- Review GitHub's [pricing for Actions](https://github.com/pricing) to understand costs.
-- For public repositories, GitHub Actions are free with generous limits.
+## Configuration
 
-## Getting Started
+The plugin reads its config from Matterbridge's plugin settings UI (or `matterbridge-plugin-nolongerevil-thermostat.config.json`):
 
-1. Create a repository from this template using the [template feature of GitHub](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-repository-from-a-template).
-2. Clone it locally and open the cloned folder project with [VS Code](https://code.visualstudio.com/). If you have docker or docker desktop, just run `code .`.
-3. When prompted, reopen in the devcontainer. VS Code will automatically build and start the development environment with all dependencies installed.
-4. Update the code and configuration files as needed for your plugin. Change the name (keep always matterbridge- at the beginning of the name), version, description, author, homepage, repository, bugs and funding in the package.json.
-5. Follow the instructions in the matterbridge [README-DEV](https://github.com/Luligu/matterbridge/blob/main/README-DEV.md) and comments in module.ts to implement your plugin logic.
+| Field                  | Type     | Default                 | Description                                                                                                      |
+| ---------------------- | -------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `apiUrl`               | string   | `http://localhost:8082` | Base URL of the No Longer Evil self-hosted control server. No trailing slash needed.                             |
+| `pollIntervalSeconds`  | integer  | `300`                   | Defensive periodic re-sync. Live updates use SSE; this poll catches anything the stream missed. `0` disables it. |
+| `whiteList`            | string[] | `[]`                    | Only thermostats whose name or serial appears here will be exposed. Empty = all.                                 |
+| `blackList`            | string[] | `[]`                    | Thermostats whose name or serial appears here are excluded.                                                      |
+| `debug`                | boolean  | `false`                 | Verbose plugin logging.                                                                                          |
+| `unregisterOnShutdown` | boolean  | `false`                 | Unregister all devices on shutdown — useful during development.                                                  |
 
-## Periodical Updates
+### Security note
 
-This template evolves over time to keep up with Matterbridge, Node.js, TypeScript, and the surrounding tooling ecosystem. Periodically pulling in the latest template changes helps your plugin benefit from:
+The No Longer Evil self-hosted control server has **no authentication by default**. If you expose it outside your trusted LAN, put it behind a reverse proxy with proper auth before pointing this plugin at it.
 
-- Security and dependency updates (Node.js and tooling).
-- CI improvements (new Node versions, workflow hardening, and cross-platform fixes).
-- Developer experience updates (Dev Container tweaks, lint/format configs, test runner updates).
+## Mode mapping
 
-If your plugin repository was created from this template, it’s a good habit to review new template releases/commits and selectively copy the relevant files into your plugin repo. Typical “template-owned” areas to keep in sync include:
+| No Longer Evil mode | Matter `SystemMode` |
+| ------------------- | ------------------- |
+| `off`               | `Off` (0)           |
+| `heat`              | `Heat` (4)          |
+| `cool`              | `Cool` (3)          |
+| `range`             | `Auto` (1)          |
+| `emergency`         | `EmergencyHeat` (5) |
 
-- `.devcontainer/` (development environment and extensions)
-- `.github/workflows/` (build/test/publish/CodeQL/Codecov pipelines)
-- Tooling configs like `eslint.config.js`, `prettier.config.js`, `tsconfig*.json`, `jest.config.js`, `vite.config.ts`
-- Helper scripts under `scripts/` (release/version automation)
+In `range`/Auto mode the plugin uses the `target_temperature_low` / `target_temperature_high` fields and writes both bounds when either setpoint is changed from a Matter controller.
 
-Tip: prefer copying and adapting these files rather than rewriting them from scratch—staying close to the template makes future updates faster and less error-prone.
+## Out of scope (for now)
 
-## Using the Dev Container
+The first release deliberately keeps the surface small. The following are not exposed yet but the codebase has clean seams for adding them:
 
-- Docker Desktop or Docker Engine are required to use the Dev Container.
-- Devcontainer works correctly on Linux, macOS, Windows, WSL2.
-- The devcontainer provides Node.js, npm, TypeScript, ESLint, Prettier, Jest, Vitest and other tools and extensions pre-installed and configured.
-- The dev branch of Matterbridge is already build and installed into the Dev Container and linked to the plugin. The plugin is automatically added to matterbridge.
-- The devcontainer is optimized using named mounts for node_modules, .cache and matterbridge.
-- You can run, build, and test your plugin directly inside the container.
-- To open a terminal in the devcontainer, use the VS Code terminal after the container starts.
-- All commands (npm, tsc, matterbridge etc.) will run inside the container environment.
-- All the source files are on the host.
+- Fan control (`set_fan` / Matter `FanControl` cluster)
+- Humidity reporting
+- Schedule editing
+- Setting `EmergencyHeat` from a Matter controller (it's read-back only)
 
-## Dev containers networking limitations
+## Troubleshooting
 
-Dev containers have networking limitations depending on the host OS and Docker setup.
+### "SSE event stream reconnecting after: terminated" every 30–60 s
 
-• Docker Desktop on Windows or macOS:
+This is expected behavior with some servers and reverse proxies — the SSE connection gets closed when idle, the plugin reconnects automatically, and no events are lost outside a sub-second gap. The `info`-level log entry is intentionally visible so you can confirm the loop is healthy.
 
-- Runs inside a VM
-- Host networking mode is NOT available
-- Use the Matterbridge Plugin Dev Container system (https://matterbridge.io/reflector/MatterbridgeDevContainer.html) for development and testing. It provides a similar environment to the native Linux setup with the following features:
+### Plugin shows the away switch but no thermostat
 
-  ✅ Is possible to pair with an Home Assistant instance running in docker compose on the same host
+Make sure you're running v1.0.0 or later — earlier dev builds had a unit-encoding bug that caused thermostat registration to fail silently.
 
-  ✅ mDNS works normally inside the containers
+### Two devices with the same name
 
-  ✅ Remote and local network access (cloud services, internet APIs) work normally
+You may have stale registrations from a prior run. Either:
 
-  ✅ Matterbridge and plugins work normally
+- Set `unregisterOnShutdown: true`, restart matterbridge, then turn it back off; or
+- `matterbridge -remove .` then `matterbridge -add .`.
 
-  ✅ Matterbridge frontend works normally
+## Development
 
-- Use the Matterbridge mDNS Reflector with the Matterbridge Plugin Dev Container system (https://matterbridge.io/reflector/Reflector.html) if you want to pair with a controller on the local network with the following features:
+```bash
+npm install
+npm run build
+npm run test            # Jest, must hit 100% coverage on lines + functions
+npm run test:vitest     # Vitest mirror
+npm run lint
+npm run format:check
+```
 
-  ✅ Is possible to pair with a controller running on the local network using mDNS reflector
+To run against a local Matterbridge:
 
-  ✅ mDNS, remote and local network access (cloud services, internet APIs) work normally
+```bash
+npm run dev:link        # links the global matterbridge package
+npm run matterbridge:add
+matterbridge
+```
 
-  ✅ Matterbridge and plugins work normally
+## License
 
-  ✅ Matterbridge frontend works normally
+[Apache 2.0](LICENSE).
 
-• Native Linux or WSL 2 with Docker Engine CLI integration:
-
-- ✅ Host networking IS available (with --network=host)
-
-- ✅ Full local network access is supported
-
-- ✅ Matterbridge and plugins work correctly, including pairing
-
-- ✅ Matterbridge frontend works normally
-
-## Documentation
-
-Refer to the Matterbridge [documentation](https://matterbridge.io) for other guidelines.
-
----
+This plugin is built on the excellent [matterbridge-plugin-template](https://github.com/Luligu/matterbridge-plugin-template) by Luca Liguori.

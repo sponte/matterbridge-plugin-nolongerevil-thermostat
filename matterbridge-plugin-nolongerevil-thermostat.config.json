@@ -1,0 +1,10 @@
+{
+  "name": "matterbridge-plugin-nolongerevil-thermostat",
+  "type": "DynamicPlatform",
+  "apiUrl": "http://localhost:8082",
+  "pollIntervalSeconds": 300,
+  "whiteList": [],
+  "blackList": [],
+  "debug": false,
+  "unregisterOnShutdown": false
+}

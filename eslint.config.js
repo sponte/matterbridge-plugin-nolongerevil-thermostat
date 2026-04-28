@@ -59,7 +59,7 @@ export default defineConfig([
       'simple-import-sort/imports': ['warn'],
       'simple-import-sort/exports': ['warn'],
       'n/prefer-node-protocol': 'error', // Prefer using 'node:' protocol for built-in modules
-      'n/no-unsupported-features/node-builtins': ['error', { ignores: ['fetch'] }],
+      'n/no-unsupported-features/node-builtins': ['error', { ignores: ['fetch', 'Response', 'ReadableStream', 'TextEncoder', 'TextDecoder'] }],
       'n/no-extraneous-import': 'off', // Allow imports from node_modules
       'n/no-unpublished-import': 'off', // Allow imports from unpublished packages
       'jsdoc/tag-lines': ['error', 'any', { startLines: 1, endLines: 0 }], // Require a blank line before JSDoc comments
@@ -131,6 +131,7 @@ export default defineConfig([
       '@typescript-eslint/no-explicit-any': 'off', // Allow 'any' type in test files
       '@typescript-eslint/no-empty-function': 'off', // Allow empty functions in test files
       '@typescript-eslint/require-await': 'off', // Disable TypeScript rule for async functions that don't use await in test files
+      '@typescript-eslint/no-non-null-assertion': 'off', // Allow ! assertions in tests for terse mock access
       'jsdoc/require-jsdoc': 'off', // Disable JSDoc rule in test files
 
       // Recommended Jest rules
@@ -158,6 +159,7 @@ export default defineConfig([
       '@typescript-eslint/no-explicit-any': 'off', // Allow 'any' type in test files
       '@typescript-eslint/no-empty-function': 'off', // Allow empty functions in test files
       '@typescript-eslint/require-await': 'off', // Disable TypeScript rule for async functions that don't use await in test files
+      '@typescript-eslint/no-non-null-assertion': 'off', // Allow ! assertions in tests for terse mock access
       'jsdoc/require-jsdoc': 'off', // Disable JSDoc rule in test files
 
       // Recommended Vitest rules

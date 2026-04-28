@@ -1,8 +1,0 @@
-{
-  "name": "matterbridge-plugin-template",
-  "type": "DynamicPlatform",
-  "whiteList": [],
-  "blackList": [],
-  "debug": false,
-  "unregisterOnShutdown": false
-}
