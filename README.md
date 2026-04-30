@@ -1,5 +1,7 @@
 # Matterbridge No Longer Evil Thermostat Plugin
 
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-FFDD00?logo=buy-me-a-coffee&logoColor=black)](https://www.buymeacoffee.com/stanwozniak)
+
 [![npm version](https://img.shields.io/npm/v/matterbridge-plugin-nolongerevil-thermostat.svg)](https://www.npmjs.com/package/matterbridge-plugin-nolongerevil-thermostat)
 [![Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
